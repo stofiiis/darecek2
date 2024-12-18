@@ -1,5 +1,7 @@
 package com.example.darecek2
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,43 +15,68 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.example.darecek2.ui.theme.Darecek2Theme
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.withContext
+import kotlinx.coroutines.*
+import okhttp3.Credentials
 
 class MainActivity : ComponentActivity() {
+
+    private val clientId = "10868b190d6c404a866aae9cb444bec3"
+    private val clientSecret = "9d55f48d99e94f9aaa85d00f7237455e"
+    private val redirectUri = "yourapp://callback"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            Darecek2Theme {
-                MainScreen("10868b190d6c404a866aae9cb444bec3", "9d55f48d99e94f9aaa85d00f7237455e")
+
+        // Získání OAuth kódu
+        if (intent?.data != null && intent.data?.scheme == "yourapp") {
+            val code = intent.data?.getQueryParameter("code")
+            code?.let {
+                setContent {
+                    Darecek2Theme {
+                        MainScreen(clientId, clientSecret, it)
+                    }
+                }
             }
+        } else {
+            // Spuštění OAuth přihlašovací stránky
+            val authUrl =
+                "https://accounts.spotify.com/authorize?client_id=$clientId&response_type=code&redirect_uri=$redirectUri&scope=user-read-currently-playing"
+            startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(authUrl)))
         }
     }
 }
 
 @Composable
-fun MainScreen(clientId: String, clientSecret: String) {
-    val messages = listOf(
-        "Mám skvělou a super mámu!",
-        "Moje máma je nejlepší!",
-        "Máma je úžasná!"
-    )
-    var currentMessageIndex by remember { mutableStateOf(0) }
+fun MainScreen(clientId: String, clientSecret: String, authCode: String) {
     var currentlyPlayingTrack by remember { mutableStateOf("Loading...") }
+    val momMessages = listOf(
+        "Mamka je ta nejlepší na světě! ❤️",
+        "Díky mamce je každý den krásnější! 🌟",
+        "Mamka je prostě skvělá! 💪",
+        "Bez mamky bych byl ztracený! 😍",
+        "Mamka má srdce ze zlata! 💖"
+    )
+    var currentMomMessage by remember { mutableStateOf(momMessages[0]) }
 
-    // Rotace zpráv
+    var accessToken by remember { mutableStateOf("") }
+
+    // Rotace hlášek o mamce každých 5 sekund
     LaunchedEffect(Unit) {
         while (true) {
-            delay(2000)
-            currentMessageIndex = (currentMessageIndex + 1) % messages.size
+            for (message in momMessages) {
+                currentMomMessage = message
+                delay(5000)
+            }
         }
     }
 
-    // Načtení aktuálně přehrávané skladby
-    LaunchedEffect(clientId, clientSecret) {
-        val accessToken = fetchAccessToken(clientId, clientSecret)
-        currentlyPlayingTrack = fetchCurrentlyPlayingTrack(accessToken)
+    // Získání tokenu a pravidelná aktualizace tracku
+    LaunchedEffect(authCode) {
+        accessToken = fetchAccessTokenOAuth(clientId, clientSecret, authCode)
+        while (true) {
+            currentlyPlayingTrack = fetchCurrentlyPlayingTrack(accessToken)
+            delay(5000) // Aktualizace každých 5 sekund
+        }
     }
 
     Box(
@@ -59,37 +86,43 @@ fun MainScreen(clientId: String, clientSecret: String) {
         contentAlignment = Alignment.Center
     ) {
         Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.SpaceBetween,
-            modifier = Modifier.fillMaxSize()
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
+            // Hláška o mamce
             Text(
-                text = messages[currentMessageIndex],
-                style = MaterialTheme.typography.headlineMedium,
+                text = currentMomMessage,
+                style = MaterialTheme.typography.headlineSmall,
+                textAlign = TextAlign.Center,
+                color = Color.Red,
+                modifier = Modifier.padding(bottom = 24.dp)
+            )
+            // Spotify informace
+            Text(
+                text = "Currently Playing on Spotify:",
+                style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(16.dp)
             )
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(Color(0xFF00FF00))
-                    .padding(16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text(text = "Playing on Spotify: $currentlyPlayingTrack")
-                Button(onClick = { /* Zatím prázdné tlačítko */ }) {
-                    Text(text = "Jam")
-                }
-            }
+            Text(
+                text = currentlyPlayingTrack,
+                style = MaterialTheme.typography.bodyLarge,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(16.dp)
+            )
         }
     }
 }
 
-suspend fun fetchAccessToken(clientId: String, clientSecret: String): String {
+suspend fun fetchAccessTokenOAuth(clientId: String, clientSecret: String, code: String): String {
+    val redirectUri = "yourapp://callback"
     return withContext(Dispatchers.IO) {
-        val credentials = okhttp3.Credentials.basic(clientId, clientSecret)
-        val response = SpotifyApi.authService.getAccessToken(credentials)
+        val credentials = Credentials.basic(clientId, clientSecret)
+        val response = SpotifyApi.authService.getAccessToken(
+            grantType = "authorization_code",
+            code = code,
+            redirectUri = redirectUri,
+            authorization = credentials
+        )
         response.accessToken
     }
 }
@@ -98,16 +131,11 @@ suspend fun fetchCurrentlyPlayingTrack(accessToken: String): String {
     return withContext(Dispatchers.IO) {
         try {
             val response = SpotifyApi.apiService.getCurrentlyPlayingTrack("Bearer $accessToken")
-            val track = response.item
-            if (track != null) {
-                val trackName = track.name
-                val artistNames = track.artists.joinToString(", ") { it.name }
-                "$trackName by $artistNames"
-            } else {
-                "No track playing"
-            }
+            val trackName = response.item?.name ?: "No track playing"
+            val artistNames = response.item?.artists?.joinToString(", ") { it.name } ?: ""
+            "$trackName by $artistNames"
         } catch (e: Exception) {
-            "Error: ${e.message}"
+            "No track playing"
         }
     }
 }

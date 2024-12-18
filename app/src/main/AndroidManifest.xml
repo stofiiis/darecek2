@@ -20,7 +20,10 @@
             android:theme="@style/Theme.Darecek2">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
-
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="yourapp" android:host="callback" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
