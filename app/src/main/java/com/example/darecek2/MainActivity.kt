@@ -50,11 +50,11 @@ class MainActivity : ComponentActivity() {
 fun MainScreen(clientId: String, clientSecret: String, authCode: String) {
     var currentlyPlayingTrack by remember { mutableStateOf("Loading...") }
     val momMessages = listOf(
-        "Mamka je ta nejlepší na světě! ❤️",
+        "Mami jsi ta nejlepší na světě! ❤️",
         "Díky mamce je každý den krásnější! 🌟",
-        "Mamka je prostě skvělá! 💪",
+        "Mami jsi prostě skvělá! 💪",
         "Bez mamky bych byl ztracený! 😍",
-        "Mamka má srdce ze zlata! 💖"
+        "Mami máš srdce ze zlata! 💖"
     )
     var currentMomMessage by remember { mutableStateOf(momMessages[0]) }
 
@@ -98,7 +98,7 @@ fun MainScreen(clientId: String, clientSecret: String, authCode: String) {
             )
             // Spotify informace
             Text(
-                text = "Currently Playing on Spotify:",
+                text = "Aktuálně poslouchám:",
                 style = MaterialTheme.typography.headlineSmall,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.padding(16.dp)
@@ -131,11 +131,11 @@ suspend fun fetchCurrentlyPlayingTrack(accessToken: String): String {
     return withContext(Dispatchers.IO) {
         try {
             val response = SpotifyApi.apiService.getCurrentlyPlayingTrack("Bearer $accessToken")
-            val trackName = response.item?.name ?: "No track playing"
+            val trackName = response.item?.name ?: "Nic nehraje"
             val artistNames = response.item?.artists?.joinToString(", ") { it.name } ?: ""
             "$trackName by $artistNames"
         } catch (e: Exception) {
-            "No track playing"
+            "Nic"
         }
     }
 }
